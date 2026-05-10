@@ -21,6 +21,9 @@
     "ai:generate": "node scripts/ai-analyze.mjs --mode generate-test",
     "test:api": "pytest api-tests/"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["cypress"]
+  },
   "devDependencies": {
     "@types/node": "^22.13.0",
     "allure-commandline": "^2.30.0",
