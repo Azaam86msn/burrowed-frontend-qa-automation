@@ -1,0 +1,211 @@
+# .github/workflows/regression.yml
+#
+# PURPOSE  : Full regression suite — runs on the 1st of every month at 06:00 UTC
+#            and is also manually dispatchable (with optional spec override).
+#
+# REPORTS  : Allure HTML report is published to GitHub Pages at:
+#              https://<owner>.github.io/<repo>/regression/<run_number>/
+#            Each monthly run gets its own sub-directory so history is preserved.
+#            The raw report is also uploaded as a downloadable artifact (30 days).
+#
+# EMAIL    : On any failure, an HTML email is sent via Gmail SMTP.
+#
+# SECRETS NEEDED (Settings → Secrets and variables → Actions):
+#   CYPRESS_BASE_URL   e.g. https://burrowed.org
+#   API_BASE_URL       e.g. https://burrowed-magazine-api.onrender.com/api
+#   MAIL_USERNAME      Gmail address used to send (e.g. qa-bot@gmail.com)
+#   MAIL_PASSWORD      Gmail App Password — NOT your account password.
+#                      Generate at: Google Account → Security → App passwords.
+#   MAIL_TO            Recipient(s), comma-separated (e.g. team@example.com)
+#
+# GITHUB PAGES SETUP (one-time):
+#   Repository Settings → Pages → Source: "Deploy from a branch"
+#   Branch: gh-pages  /  Folder: / (root)
+#   The peaceiris/actions-gh-pages action creates this branch automatically
+#   on the first run — you don't need to create it manually.
+
+name: "🧪 Regression Suite — Scheduled & Manual"
+
+on:
+  schedule:
+    # 1st of every month at 06:00 UTC
+    - cron: "0 6 1 * *"
+
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: "Spec glob to run (leave blank for full regression)"
+        required: false
+        default: "cypress/e2e/regression/**/*.cy.ts"
+      browser:
+        description: "Browser"
+        required: false
+        default: "chrome"
+        type: choice
+        options:
+          - chrome
+          - firefox
+          - edge
+
+jobs:
+  regression:
+    name: "Regression Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # ── Setup ──────────────────────────────────────────────────────────────
+
+      - name: "⬇️  Checkout"
+        uses: actions/checkout@v4
+
+      - name: "📦 Setup pnpm"
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: "🟢 Setup Node.js 20"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: "☕ Setup Java 17 (Allure CLI)"
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: "📥 Install dependencies"
+        run: pnpm install --frozen-lockfile
+
+      # ── Test run ──────────────────────────────────────────────────────────
+
+      - name: "🧪 Run regression tests"
+        uses: cypress-io/github-action@v6
+        with:
+          install: false
+          command: >
+            pnpm cypress run
+            --spec "${{ github.event.inputs.spec || 'cypress/e2e/regression/**/*.cy.ts' }}"
+            --browser "${{ github.event.inputs.browser || 'chrome' }}"
+        env:
+          CYPRESS_BASE_URL: ${{ secrets.CYPRESS_BASE_URL }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+
+      # ── Reporting — artifacts ─────────────────────────────────────────────
+
+      - name: "📊 Generate Allure report"
+        if: always()
+        run: pnpm allure:generate
+
+      - name: "📤 Upload Allure HTML report (artifact)"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "regression-allure-report-${{ github.run_number }}"
+          path: allure-report/
+          retention-days: 30
+
+      - name: "📤 Upload Allure raw results (artifact)"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "regression-allure-results-${{ github.run_number }}"
+          path: allure-results/
+          retention-days: 30
+
+      # ── Reporting — GitHub Pages ──────────────────────────────────────────
+
+      # Each run is published under /regression/<run_number>/ so reports
+      # accumulate over time. keep_files: true prevents wiping previous reports.
+      - name: "🌐 Publish Allure report to GitHub Pages"
+        if: always()
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+          destination_dir: "regression/${{ github.run_number }}"
+          keep_files: true
+
+      - name: "🖼️  Upload failure screenshots"
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "regression-screenshots-${{ github.run_number }}"
+          path: cypress/screenshots/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: "🎬 Upload videos"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "regression-videos-${{ github.run_number }}"
+          path: cypress/videos/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # ── Failure notification ──────────────────────────────────────────────
+
+      - name: "📧 Send failure email"
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "❌ Burrowed Regression Failed — Run #${{ github.run_number }}"
+          to: ${{ secrets.MAIL_TO }}
+          from: "Burrowed QA Bot <${{ secrets.MAIL_USERNAME }}>"
+          html_body: |
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family:sans-serif;color:#333;max-width:600px;margin:0 auto">
+              <h2 style="color:#c0392b;border-bottom:2px solid #e74c3c;padding-bottom:8px">
+                ❌ Regression Suite Failed
+              </h2>
+              <p>The Burrowed Magazine monthly regression suite has encountered failures.</p>
+
+              <table cellpadding="8" cellspacing="0"
+                     style="border-collapse:collapse;width:100%;margin:16px 0">
+                <tr style="background:#f9f9f9">
+                  <td style="border:1px solid #ddd;width:140px"><strong>Run</strong></td>
+                  <td style="border:1px solid #ddd">#${{ github.run_number }}</td>
+                </tr>
+                <tr>
+                  <td style="border:1px solid #ddd"><strong>Branch</strong></td>
+                  <td style="border:1px solid #ddd">${{ github.ref_name }}</td>
+                </tr>
+                <tr style="background:#f9f9f9">
+                  <td style="border:1px solid #ddd"><strong>Trigger</strong></td>
+                  <td style="border:1px solid #ddd">${{ github.event_name }}</td>
+                </tr>
+                <tr>
+                  <td style="border:1px solid #ddd"><strong>Commit</strong></td>
+                  <td style="border:1px solid #ddd;font-family:monospace;font-size:12px">
+                    ${{ github.sha }}
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin-top:24px">
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                   style="background:#e74c3c;color:#fff;padding:10px 18px;border-radius:4px;
+                          text-decoration:none;display:inline-block;margin-right:8px">
+                  View Run &amp; Download Artifacts
+                </a>
+                <a href="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/regression/${{ github.run_number }}"
+                   style="background:#2980b9;color:#fff;padding:10px 18px;border-radius:4px;
+                          text-decoration:none;display:inline-block">
+                  Open Allure Report
+                </a>
+              </p>
+
+              <p style="margin-top:32px;font-size:12px;color:#999">
+                Sent automatically by the burrowed-frontend-qa-automation pipeline.
+              </p>
+            </body>
+            </html>

@@ -1,0 +1,80 @@
+# docker-compose.yml  (project root)
+#
+# Runs the full Cypress test suite inside Docker with WireMock for API stubs.
+#
+# USAGE:
+#   docker compose up --exit-code-from cypress   # run tests; exit when cypress exits
+#   docker compose down --remove-orphans          # clean up
+#
+#   Or via package.json shortcuts:
+#   pnpm docker:up
+#   pnpm docker:down
+#
+# ENV VARS:
+#   Copy .env.example to .env before running.
+#   CYPRESS_BASE_URL and API_BASE_URL are picked up automatically.
+#   The GEMINI_API_KEY is NOT passed into the container — keep it local.
+#
+# NOTES:
+#   - node_modules is kept in a named Docker volume (cypress_node_modules) so
+#     the container's install doesn't clobber the host's node_modules folder.
+#   - Allure results are written to ./allure-results on the host (via bind mount)
+#     so you can run `pnpm allure:generate` locally after the container exits.
+#   - Videos and screenshots land in ./cypress/videos and ./cypress/screenshots.
+
+version: "3.8"
+
+services:
+
+  # ── WireMock — lightweight HTTP mock server ────────────────────────────────
+  # Serves the stub mappings in docker/wiremock/mappings/ over port 8080.
+  # Inside the Docker network, Cypress can reach it at http://wiremock:8080.
+  wiremock:
+    image: wiremock/wiremock:3.5.4-1
+    container_name: burrowed-wiremock
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./docker/wiremock/mappings:/home/wiremock/mappings:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # ── Cypress — containerised test runner ───────────────────────────────────
+  # Uses the official cypress/included image (Chrome + Firefox bundled).
+  # Installs pnpm, bootstraps node_modules, then runs the full test suite.
+  cypress:
+    image: cypress/included:15.14.2
+    container_name: burrowed-cypress
+    working_dir: /e2e
+    volumes:
+      # Mount the entire project so Cypress can find cypress.config.ts, specs, etc.
+      - .:/e2e
+      # Named volume prevents the container node_modules from conflicting with host.
+      - cypress_node_modules:/e2e/node_modules
+    environment:
+      CYPRESS_BASE_URL: ${CYPRESS_BASE_URL:-https://burrowed.org}
+      API_BASE_URL: ${API_BASE_URL:-https://burrowed-magazine-api.onrender.com/api}
+      # WireMock is reachable at this URL from inside the Docker network.
+      # Reference it in cy.intercept() stubs that need to point to the mock server.
+      CYPRESS_WIREMOCK_URL: http://wiremock:8080
+    depends_on:
+      wiremock:
+        condition: service_healthy
+    # Override the default entrypoint so we can install pnpm first.
+    entrypoint: bash
+    command: >
+      -c "
+        npm install -g pnpm@10.18.3 --quiet &&
+        pnpm install --frozen-lockfile --prefer-offline &&
+        pnpm cypress run
+      "
+
+volumes:
+  # Persists the container's node_modules between restarts to speed up re-runs.
+  # Run `docker volume rm burrowed-frontend-qa-automation_cypress_node_modules`
+  # to force a clean install on the next `docker compose up`.
+  cypress_node_modules:

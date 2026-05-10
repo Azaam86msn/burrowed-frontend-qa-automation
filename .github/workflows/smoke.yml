@@ -1,0 +1,104 @@
+# .github/workflows/smoke.yml
+#
+# PURPOSE  : Required quality gate — runs on every push and every PR.
+#            A failing smoke run blocks the PR from being merged when
+#            branch-protection rules require this check to pass.
+#
+# ARTIFACTS: Allure results, screenshots (failure only), videos — kept 7 days.
+#
+# SECRETS NEEDED (Settings → Secrets and variables → Actions):
+#   CYPRESS_BASE_URL   e.g. https://burrowed.org
+#   API_BASE_URL       e.g. https://burrowed-magazine-api.onrender.com/api
+
+name: "🚀 Smoke Tests — Quality Gate"
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Cancel an in-flight run for the same branch the moment a new commit arrives.
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: "Smoke Tests (Chrome)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # ── Setup ──────────────────────────────────────────────────────────────
+
+      - name: "⬇️  Checkout"
+        uses: actions/checkout@v4
+
+      - name: "📦 Setup pnpm"
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: "🟢 Setup Node.js 20"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      # allure-commandline wraps the Allure CLI jar — Java must be on PATH.
+      # ubuntu-latest ships with Java but pinning temurin 17 makes it explicit.
+      - name: "☕ Setup Java 17 (Allure CLI)"
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: "📥 Install dependencies"
+        run: pnpm install --frozen-lockfile
+
+      # ── Test run ──────────────────────────────────────────────────────────
+
+      # cypress-io/github-action handles Cypress binary caching automatically.
+      # install: false because pnpm install already put Cypress in node_modules.
+      - name: "🧪 Run smoke tests"
+        uses: cypress-io/github-action@v6
+        with:
+          install: false
+          command: pnpm cypress:smoke
+          browser: chrome
+        env:
+          CYPRESS_BASE_URL: ${{ secrets.CYPRESS_BASE_URL }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+
+      # ── Reporting ─────────────────────────────────────────────────────────
+
+      - name: "📊 Generate Allure report"
+        if: always()
+        run: pnpm allure:generate
+
+      - name: "📤 Upload Allure results"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "smoke-allure-results-${{ github.run_number }}"
+          path: allure-results/
+          retention-days: 7
+
+      - name: "🖼️  Upload failure screenshots"
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "smoke-screenshots-${{ github.run_number }}"
+          path: cypress/screenshots/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: "🎬 Upload videos"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "smoke-videos-${{ github.run_number }}"
+          path: cypress/videos/
+          retention-days: 7
+          if-no-files-found: ignore

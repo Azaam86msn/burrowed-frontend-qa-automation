@@ -1,0 +1,12 @@
+{
+  "mappings": [
+    {
+      "request": { "method": "POST", "url": "/api/subscribe/" },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "message": "Successfully subscribed" }
+      }
+    }
+  ]
+}

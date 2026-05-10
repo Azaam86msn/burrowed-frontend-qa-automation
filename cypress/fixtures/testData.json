@@ -1,0 +1,23 @@
+{
+  "subscriber": {
+    "name": "Jane Austen",
+    "email": "jane.austen.test@mailinator.com"
+  },
+  "submitter": {
+    "firstName": "Jane",
+    "lastName": "Austen",
+    "email": "jane.austen.test@mailinator.com",
+    "title": "My Test Story",
+    "bio": "A test author with ten words exactly right here.",
+    "country": "Sri Lanka",
+    "countryCode": "LK",
+    "note": "Automated test submission — please ignore."
+  },
+  "collaborator": {
+    "name": "Test Brand",
+    "email": "brand.test@mailinator.com",
+    "organization": "TestCo",
+    "message": "Automated collaboration inquiry — please ignore."
+  },
+  "magazinePdfUrl": "https://burrowed-magazine-media.s3.ap-south-1.amazonaws.com/media/magazines/hearthside-reverie_2025_Winter.pdf"
+}
