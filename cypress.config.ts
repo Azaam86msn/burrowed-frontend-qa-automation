@@ -18,9 +18,8 @@ export default defineConfig({
       openMode: 0,
     },
 
-    // Disables insecure browser-side access to Cypress.env().
-    // Required to suppress the deprecation warning in Cypress 15+.
-    allowCypressEnv: false,
+    // allowCypressEnv REMOVED — allure-cypress uses Cypress.env('allure')
+    // internally and crashes when this is set to false.
 
     env: {
       apiBaseUrl:
@@ -32,9 +31,6 @@ export default defineConfig({
     experimentalModifyObstructiveThirdPartyCode: true,
 
     setupNodeEvents(on, config) {
-      // Wire up the Allure reporter.
-      // Raw JSON results are written to allure-results/ during the run.
-      // Generate the HTML report afterwards with: pnpm allure:generate
       allureCypress(on, config, {
         resultsDir: "allure-results",
       });
