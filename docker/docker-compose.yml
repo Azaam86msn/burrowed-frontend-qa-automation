@@ -11,9 +11,6 @@
 #
 # WireMock will be available at http://localhost:8080.
 # The subscribe stub mapping is already configured in ./wiremock/mappings/.
-
-version: "3.8"
-
 services:
   wiremock:
     image: wiremock/wiremock:3.5.4-1

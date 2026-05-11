@@ -21,9 +21,6 @@
 #   - Allure results are written to ./allure-results on the host (via bind mount)
 #     so you can run `pnpm allure:generate` locally after the container exits.
 #   - Videos and screenshots land in ./cypress/videos and ./cypress/screenshots.
-
-version: "3.8"
-
 services:
 
   # ── WireMock — lightweight HTTP mock server ────────────────────────────────
