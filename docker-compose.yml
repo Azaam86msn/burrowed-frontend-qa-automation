@@ -22,7 +22,6 @@
 #     so you can run `pnpm allure:generate` locally after the container exits.
 #   - Videos and screenshots land in ./cypress/videos and ./cypress/screenshots.
 services:
-
   # ── WireMock — lightweight HTTP mock server ────────────────────────────────
   # Serves the stub mappings in docker/wiremock/mappings/ over port 8080.
   # Inside the Docker network, Cypress can reach it at http://wiremock:8080.
@@ -34,7 +33,8 @@ services:
     volumes:
       - ./docker/wiremock/mappings:/home/wiremock/mappings:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health || exit 1"]
+      test:
+        ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 12

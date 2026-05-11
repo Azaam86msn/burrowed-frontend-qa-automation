@@ -43,7 +43,6 @@ burrowed-frontend-qa-automation/
 │       ├── commands.ts        # Custom Cypress commands (stubs, intercepts)
 │       └── e2e.ts             # Global support file (Allure + exception handling)
 ├── docker/
-│   ├── docker-compose.yml     # WireMock-only (for local API stubbing)
 │   └── wiremock/mappings/     # WireMock stub definitions
 ├── scripts/
 │   └── ai-analyze.mjs         # AI failure/flaky/locator analysis via Gemini
@@ -77,6 +76,7 @@ cp .env.example .env   # then fill in your values
 | `CYPRESS_BASE_URL` | `https://burrowed.org` | Target site URL |
 | `API_BASE_URL` | `https://burrowed-magazine-api.onrender.com/api` | Backend API base |
 | `GEMINI_API_KEY` | — | Gemini API key for AI analysis scripts |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model used by `pnpm ai:*` scripts |
 
 > **Never commit `.env`** — it is in `.gitignore`.
 
@@ -114,15 +114,8 @@ pnpm docker:down
 
 Under the hood this runs `docker compose up --exit-code-from cypress` using the root-level `docker-compose.yml`. The Cypress exit code propagates, so CI pipelines can use this too.
 
-**WireMock only** (for running Cypress locally while stubbing the API):
-
-```bash
-pnpm docker:wm
-# WireMock is now available at http://localhost:8080
-# Run tests as normal: pnpm cypress:run
-```
-
 **Notes:**
+
 - `node_modules` lives in a named Docker volume (`cypress_node_modules`) so the container install doesn't overwrite your host's copy. If you see stale dependency issues, prune the volume:
   ```bash
   docker volume rm burrowed-frontend-qa-automation_cypress_node_modules
@@ -135,9 +128,9 @@ pnpm docker:wm
 
 ### Smoke — quality gate (`smoke.yml`)
 
-| Trigger | Branches |
-|---|---|
-| `push` | all branches |
+| Trigger        | Branches     |
+| -------------- | ------------ |
+| `push`         | all branches |
 | `pull_request` | all branches |
 
 - Runs the smoke suite on Chrome.
@@ -148,9 +141,9 @@ pnpm docker:wm
 
 ### Regression — scheduled & manual (`regression.yml`)
 
-| Trigger | When |
-|---|---|
-| Schedule | 1st of every month at 06:00 UTC |
+| Trigger             | When                                                 |
+| ------------------- | ---------------------------------------------------- |
+| Schedule            | 1st of every month at 06:00 UTC                      |
 | `workflow_dispatch` | Manual, with optional spec glob and browser override |
 
 - Runs the full regression suite.
@@ -193,7 +186,7 @@ Each run gets its own directory — history is preserved indefinitely.
 
 ## AI-assisted analysis
 
-Four prompt templates live in `ai-prompts/` and the `scripts/ai-analyze.mjs` script feeds them to Gemini 1.5 Flash along with relevant test data.
+Four prompt templates live in `ai-prompts/` and the `scripts/ai-analyze.mjs` script feeds them to Gemini along with relevant test data. The default model is `gemini-2.5-flash`; override it with `GEMINI_MODEL` if needed.
 
 ```bash
 # After a failing run:
@@ -212,6 +205,7 @@ pnpm ai:generate   # Generates a new Cypress test based on project patterns
 Each run prints the analysis to stdout and saves it as `ai-analysis-<mode>-<timestamp>.md`.
 
 **Add to `.gitignore`** to avoid committing AI outputs:
+
 ```
 ai-analysis-*.md
 ```
@@ -242,14 +236,14 @@ Add a step after the regression run to auto-analyze failures and upload the repo
 
 Go to: Repository → Settings → Secrets and variables → Actions → New repository secret.
 
-| Secret | Required for | Description |
-|---|---|---|
-| `CYPRESS_BASE_URL` | both workflows | Target URL, e.g. `https://burrowed.org` |
-| `API_BASE_URL` | both workflows | Backend API, e.g. `https://burrowed-magazine-api.onrender.com/api` |
-| `MAIL_USERNAME` | regression | Gmail address used to send failure emails |
-| `MAIL_PASSWORD` | regression | Gmail **App Password** — not your account password. Generate at: Google Account → Security → App passwords → "Mail" → "Other" |
-| `MAIL_TO` | regression | Recipient(s), comma-separated, e.g. `lead@example.com,qa@example.com` |
-| `GEMINI_API_KEY` | optional AI steps | Only needed if you add the AI analysis step to CI |
+| Secret             | Required for      | Description                                                                                                                   |
+| ------------------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `CYPRESS_BASE_URL` | both workflows    | Target URL, e.g. `https://burrowed.org`                                                                                       |
+| `API_BASE_URL`     | both workflows    | Backend API, e.g. `https://burrowed-magazine-api.onrender.com/api`                                                            |
+| `MAIL_USERNAME`    | regression        | Gmail address used to send failure emails                                                                                     |
+| `MAIL_PASSWORD`    | regression        | Gmail **App Password** — not your account password. Generate at: Google Account → Security → App passwords → "Mail" → "Other" |
+| `MAIL_TO`          | regression        | Recipient(s), comma-separated, e.g. `lead@example.com,qa@example.com`                                                         |
+| `GEMINI_API_KEY`   | optional AI steps | Only needed if you add the AI analysis step to CI                                                                             |
 
 ---
 
@@ -262,6 +256,7 @@ Burrowed currently runs on production only (no staging). reCAPTCHA cannot be byp
 3. **Submission tests are marked "staging only"** via `TODO` comments — they test the API payload shape via the intercept handler rather than the full submission flow.
 
 **When you get a staging environment:**
+
 - Set `CYPRESS_BASE_URL` (in `.env` or CI secret) to the staging URL.
 - Add `CAPTCHA_DISABLED=true` flag to your test env config.
 - In `commands.ts`, wrap `stubRecaptcha` with an env check so it only runs when `Cypress.env('captchaDisabled')` is true.
@@ -277,7 +272,7 @@ Many selectors currently target CSS classes or structural paths that will break 
 
 ```tsx
 // Dev side (React/Next.js)
-<button data-testid="hero-read-latest-issue">Read Latest Issue</button>
+<button data-testid="hero-read-latest-issue">Read Latest Issue</button>;
 
 // Test side
 cy.get('[data-testid="hero-read-latest-issue"]').click();

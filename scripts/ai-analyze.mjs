@@ -139,7 +139,9 @@ function buildPrompt() {
     }
     const failures = collectFailures(results);
     if (failures.length === 0) {
-      console.log("✅  No failures found in allure-results/. Nothing to analyze.");
+      console.log(
+        "✅  No failures found in allure-results/. Nothing to analyze."
+      );
       process.exit(0);
     }
     console.log(`🔍  Found ${failures.length} failure(s) to analyze.\n`);
@@ -194,15 +196,16 @@ if (!GEMINI_API_KEY) {
   process.exit(1);
 }
 
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const GEMINI_ENDPOINT =
   `https://generativelanguage.googleapis.com/v1beta/models/` +
-  `gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  `${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 async function callGemini(prompt) {
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
-      temperature: 0.2,      // Lower = more deterministic, better for code/analysis
+      temperature: 0.2, // Lower = more deterministic, better for code/analysis
       maxOutputTokens: 4096,
     },
   };
@@ -228,7 +231,7 @@ async function callGemini(prompt) {
 (async () => {
   console.log(`\n🤖  Burrowed AI Analyzer`);
   console.log(`    mode: ${mode}`);
-  console.log(`    model: gemini-1.5-flash\n`);
+  console.log(`    model: ${GEMINI_MODEL}\n`);
 
   const prompt = buildPrompt();
   console.log("⏳  Sending to Gemini...\n");

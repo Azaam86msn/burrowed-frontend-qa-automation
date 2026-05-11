@@ -14,15 +14,15 @@
     "allure:clear": "node -e \"['allure-results','allure-report'].forEach(d=>{try{require('fs').rmSync(d,{recursive:true,force:true})}catch{}})\"",
     "docker:up": "docker compose up --exit-code-from cypress",
     "docker:down": "docker compose down --remove-orphans",
-    "docker:wm": "docker compose -f docker/docker-compose.yml up -d",
     "ai:analyze": "node scripts/ai-analyze.mjs --mode analyze-failure",
     "ai:flaky": "node scripts/ai-analyze.mjs --mode detect-flaky",
     "ai:locator": "node scripts/ai-analyze.mjs --mode suggest-locator-fix",
-    "ai:generate": "node scripts/ai-analyze.mjs --mode generate-test",
-    "test:api": "pytest api-tests/"
+    "ai:generate": "node scripts/ai-analyze.mjs --mode generate-test"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["cypress"]
+    "onlyBuiltDependencies": [
+      "cypress"
+    ]
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

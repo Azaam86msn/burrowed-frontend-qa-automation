@@ -1,7 +1,9 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 venv/
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
 
@@ -14,6 +16,7 @@ cypress/downloads/
 reports/
 allure-results/
 allure-report/
+ai-analysis-*.md
 
 # Environment
 .env

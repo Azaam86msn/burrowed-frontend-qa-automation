@@ -15,9 +15,9 @@ describe("[SMOKE] Homepage", () => {
   });
 
   it("renders the page with visible logo and primary navigation", () => {
-    cy.get('a[class="flex items-center space-x-2"] img[alt="Burrowed Logo"]').should(
-      "be.visible"
-    );
+    cy.get(
+      'a[class="flex items-center space-x-2"] img[alt="Burrowed Logo"]'
+    ).should("be.visible");
     cy.get('a[class="font-primary font-medium transition-colors text-accent"]')
       .contains("Home")
       .should("be.visible");
