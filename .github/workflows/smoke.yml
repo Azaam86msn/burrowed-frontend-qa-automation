@@ -1,24 +1,42 @@
 # .github/workflows/smoke.yml
 #
-# PURPOSE  : Required quality gate — runs on every push and every PR.
-#            A failing smoke run blocks the PR from being merged when
-#            branch-protection rules require this check to pass.
+# PURPOSE — two modes, one workflow:
 #
-# ARTIFACTS: Allure results, screenshots (failure only), videos — kept 7 days.
+#   MODE 1 · INTERNAL  (push / pull_request inside THIS QA repo)
+#     Triggered automatically on every push and every PR.
+#     Checks out the current branch so WIP test changes are validated.
 #
-# SECRETS NEEDED (Settings → Secrets and variables → Actions):
-#   CYPRESS_BASE_URL   e.g. https://burrowed.org
-#   API_BASE_URL       e.g. https://burrowed-magazine-api.onrender.com/api
+#   MODE 2 · EXTERNAL  (workflow_call from mhdatheek136/woodtech-frontend)
+#     Triggered by the frontend repo's qa-smoke.yml on every PR to main.
+#     Checks out THIS QA repo at main and tests https://burrowed.org.
+#     Status check "QA Smoke Gate / Smoke Tests (Chrome)" appears on the
+#     frontend PR and blocks merge when branch protection is configured.
+#
+# ARTIFACTS  Allure results, screenshots (failure only), videos — 7 days.
+#
+# SECRETS (QA repo → Settings → Secrets → Actions → Repository secrets)
+#   CYPRESS_BASE_URL   https://burrowed.org
+#   API_BASE_URL       https://burrowed-magazine-api.onrender.com/api
 
 name: "🚀 Smoke Tests — Quality Gate"
 
 on:
+  # ── Internal triggers (QA repo) ─────────────────────────────────────────
   push:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+    types:
+      - opened
+      - synchronize   # new commits pushed to an existing PR
+      - reopened
+      - ready_for_review  # draft PR marked as ready
 
-# Cancel an in-flight run for the same branch the moment a new commit arrives.
+  # ── External trigger (called by frontend repo) ──────────────────────────
+  # No inputs or secrets required — tests target the public production URL.
+  workflow_call:
+
+# Cancel stale runs when new commits arrive on the same branch/PR.
 concurrency:
   group: smoke-${{ github.ref }}
   cancel-in-progress: true
@@ -30,10 +48,30 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      # ── Setup ──────────────────────────────────────────────────────────────
+      # ── Checkout ──────────────────────────────────────────────────────────
+      #
+      # Only ONE of the two steps below runs per trigger:
+      #
+      # INTERNAL  Standard checkout on the current branch. Feature branches
+      #           and draft PRs test their own WIP code, not stale main.
+      #
+      # EXTERNAL  Must explicitly name the QA repo + ref=main because the
+      #           default checkout would pull the FRONTEND repo's code, which
+      #           has no Cypress tests.
 
-      - name: "⬇️  Checkout"
+      - name: "⬇️  Checkout (QA repo — internal)"
+        if: github.event_name != 'workflow_call'
         uses: actions/checkout@v4
+
+      - name: "⬇️  Checkout QA repo @ main (called from frontend)"
+        if: github.event_name == 'workflow_call'
+        uses: actions/checkout@v4
+        with:
+          repository: Azaam86msn/burrowed-frontend-qa-automation
+          ref: main
+          # QA repo is public — no token needed
+
+      # ── Setup ─────────────────────────────────────────────────────────────
 
       - name: "📦 Setup pnpm"
         uses: pnpm/action-setup@v4
@@ -44,8 +82,6 @@ jobs:
           node-version: "22"
           cache: "pnpm"
 
-      # allure-commandline wraps the Allure CLI jar — Java must be on PATH.
-      # ubuntu-latest ships with Java but pinning temurin 17 makes it explicit.
       - name: "☕ Setup Java 17 (Allure CLI)"
         uses: actions/setup-java@v4
         with:
@@ -57,8 +93,6 @@ jobs:
 
       # ── Test run ──────────────────────────────────────────────────────────
 
-      # cypress-io/github-action handles Cypress binary caching automatically.
-      # install: false because pnpm install already put Cypress in node_modules.
       - name: "🧪 Run smoke tests"
         uses: cypress-io/github-action@v6
         with:
@@ -66,8 +100,10 @@ jobs:
           command: pnpm cypress:smoke
           browser: chrome
         env:
-          CYPRESS_BASE_URL: ${{ secrets.CYPRESS_BASE_URL }}
-          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          # Fallback values make this work even without secrets configured,
+          # e.g. when called from the public frontend repo with no secrets.
+          CYPRESS_BASE_URL: ${{ secrets.CYPRESS_BASE_URL || 'https://burrowed.org' }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL || 'https://burrowed-magazine-api.onrender.com/api' }}
 
       # ── Reporting ─────────────────────────────────────────────────────────
 
@@ -82,8 +118,9 @@ jobs:
           name: "smoke-allure-results-${{ github.run_number }}"
           path: allure-results/
           retention-days: 7
+          if-no-files-found: ignore
 
-      - name: "🖼️  Upload failure screenshots"
+      - name: "🖼️  Upload screenshots (failure only)"
         if: failure()
         uses: actions/upload-artifact@v4
         with:
